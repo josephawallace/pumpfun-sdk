@@ -277,6 +277,11 @@ impl PumpFun {
     }
 
     #[inline]
+    pub fn get_sell_price(&self, amount: u64, trade_info: &TradeInfo) -> u64 {
+        pumpfun::common::get_sell_price(amount, trade_info)
+    }
+
+    #[inline]
     pub async fn transfer_sol(&self, payer: &Keypair, receive_wallet: &Pubkey, amount: u64) -> Result<(), anyhow::Error> {
         pumpfun::common::transfer_sol(&self.rpc, payer, receive_wallet, amount).await
     }
