@@ -75,11 +75,12 @@ impl From<SubscribeUpdateTransaction> for TransactionPretty {
 #[derive(Clone)]
 pub struct YellowstoneGrpc {
     endpoint: String,
+    x_token: Option<String>,
 }
 
 impl YellowstoneGrpc {
-    pub fn new(endpoint: String) -> Self {
-        Self { endpoint }
+    pub fn new(endpoint: String, x_token: Option<String>) -> Self {
+        Self { endpoint, x_token }
     }
 
     pub async fn connect(
@@ -100,6 +101,8 @@ impl YellowstoneGrpc {
         let mut client = GeyserGrpcClient::build_from_shared(self.endpoint.clone())
             .map_err(|e| ClientError::Other(format!("Failed to build client: {:?}", e)))?
             .tls_config(ClientTlsConfig::new().with_native_roots())
+            .map_err(|e| ClientError::Other(format!("Failed to build client: {:?}", e)))?
+            .x_token(self.x_token.clone())
             .map_err(|e| ClientError::Other(format!("Failed to build client: {:?}", e)))?
             .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT))
             .timeout(Duration::from_secs(REQUEST_TIMEOUT))

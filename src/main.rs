@@ -6,7 +6,7 @@ use solana_sdk::{commitment_config::CommitmentConfig, native_token::sol_to_lampo
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // create grpc client
     let grpc_url = "http://127.0.0.1:10000";
-    let client = YellowstoneGrpc::new(grpc_url.to_string());
+    let client = YellowstoneGrpc::new(grpc_url.to_string(), None);
 
     // Define callback function
     let callback = |event: PumpfunEvent| {
