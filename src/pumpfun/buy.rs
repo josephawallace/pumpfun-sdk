@@ -3,7 +3,7 @@ use solana_sdk::{
     compute_budget::ComputeBudgetInstruction, instruction::Instruction, message::{v0, VersionedMessage}, native_token::sol_to_lamports, pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction, transaction::{Transaction, VersionedTransaction}
 };
 use solana_hash::Hash;
-use spl_associated_token_account::instruction::create_associated_token_account;
+use spl_associated_token_account::instruction::create_associated_token_account_idempotent;
 use tokio::task::JoinHandle;
 use std::{str::FromStr, time::Instant, sync::Arc};
 
@@ -160,7 +160,7 @@ pub async fn build_buy_instructions(
     }
 
     let mut instructions = vec![];
-    instructions.push(create_associated_token_account(
+    instructions.push(create_associated_token_account_idempotent(
         &payer.pubkey(),
         &payer.pubkey(),
         &mint,
