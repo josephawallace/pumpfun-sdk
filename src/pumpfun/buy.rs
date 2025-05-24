@@ -11,38 +11,59 @@ use crate::{common::{PriorityFee, SolanaRpcClient}, constants::{self, global_con
 
 const MAX_LOADED_ACCOUNTS_DATA_SIZE_LIMIT: u32 = 250000;
 
-use super::common::{calculate_with_slippage_buy, get_bonding_curve_account, get_buy_token_amount_from_sol_amount, get_creator_vault_pda};
+use super::common::{calculate_with_slippage_buy, get_bonding_curve_pda, get_creator_vault_pda};
 
 pub async fn buy(
     rpc: Arc<SolanaRpcClient>,
     payer: Arc<Keypair>,
     mint: Pubkey,
-    amount_sol: u64,
+    creator: Pubkey,
+    buy_token_amount: u64,
+    max_amount_sol: u64,
     slippage_basis_points: Option<u64>,
     priority_fee: PriorityFee,
+    recent_blockhash: Hash,
 ) -> Result<(), anyhow::Error> {
-    let transaction = build_buy_transaction(rpc.clone(), payer.clone(), mint.clone(), amount_sol, slippage_basis_points, priority_fee.clone()).await?;
+    let transaction = build_buy_transaction(
+        payer.clone(),
+        mint.clone(),
+        creator.clone(),
+        buy_token_amount,
+        max_amount_sol,
+        slippage_basis_points,
+        priority_fee.clone(),
+        recent_blockhash,
+    ).await?;
     rpc.send_and_confirm_transaction(&transaction).await?;
     Ok(())
 }
 
 /// Buy tokens using Jito
 pub async fn buy_with_tip(
-    rpc: Arc<SolanaRpcClient>,
     fee_clients: Vec<Arc<FeeClient>>,
     payer: Arc<Keypair>,
     mint: Pubkey,
-    amount_sol: u64,
+    creator: Pubkey,
+    buy_token_amount: u64,
+    max_amount_sol: u64,
     slippage_basis_points: Option<u64>,
     priority_fee: PriorityFee,
+    recent_blockhash: Hash,
 ) -> Result<(), anyhow::Error> {
     let start_time = Instant::now();
 
     let mint = Arc::new(mint.clone());
-    let instructions = build_buy_instructions(rpc.clone(), payer.clone(), mint.clone(), amount_sol, slippage_basis_points).await?;
+    let creator = Arc::new(creator.clone());
+    let instructions = build_buy_instructions(
+        payer.clone(),
+        mint.clone(),
+        creator.clone(),
+        buy_token_amount,
+        max_amount_sol,
+        slippage_basis_points
+    ).await?;
 
     let mut transactions = vec![];
-    let recent_blockhash = rpc.get_latest_blockhash().await?;
     for fee_client in fee_clients.clone() {
         let payer = payer.clone();
         let priority_fee = priority_fee.clone();
@@ -80,12 +101,14 @@ pub async fn buy_with_tip(
 }
 
 pub async fn build_buy_transaction(
-    rpc: Arc<SolanaRpcClient>,
     payer: Arc<Keypair>,
     mint: Pubkey,
-    amount_sol: u64,
+    creator: Pubkey,
+    buy_token_amount: u64,
+    max_amount_sol: u64,
     slippage_basis_points: Option<u64>,
     priority_fee: PriorityFee,
+    recent_blockhash: Hash,
 ) -> Result<Transaction, anyhow::Error> {
     let mut instructions = vec![
         ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(MAX_LOADED_ACCOUNTS_DATA_SIZE_LIMIT),
@@ -93,10 +116,16 @@ pub async fn build_buy_transaction(
         ComputeBudgetInstruction::set_compute_unit_limit(priority_fee.unit_limit),
     ];
 
-    let build_instructions = build_buy_instructions(rpc.clone(), payer.clone(), Arc::new(mint), amount_sol, slippage_basis_points).await?;
+    let build_instructions = build_buy_instructions(
+        payer.clone(),
+        Arc::new(mint),
+        Arc::new(creator),
+        buy_token_amount,
+        max_amount_sol,
+        slippage_basis_points
+    ).await?;
     instructions.extend(build_instructions);
 
-    let recent_blockhash = rpc.get_latest_blockhash().await?;
     let transaction = Transaction::new_signed_with_payer(
         &instructions,
         Some(&payer.pubkey()),
@@ -136,28 +165,20 @@ pub async fn build_buy_transaction_with_tip(
 }
 
 pub async fn build_buy_instructions(
-    rpc: Arc<SolanaRpcClient>,
     payer: Arc<Keypair>,
     mint: Arc<Pubkey>,
-    buy_sol_cost: u64,
+    creator: Arc<Pubkey>,
+    buy_token_amount: u64,
+    max_amount_sol: u64,
     slippage_basis_points: Option<u64>,
 ) -> Result<Vec<Instruction>, anyhow::Error> {
-    if buy_sol_cost == 0 {
+    if max_amount_sol == 0 {
         return Err(anyhow!("Amount cannot be zero"));
     }
 
-    let (bonding_curve, bonding_curve_pda) = get_bonding_curve_account(&rpc, &mint).await?;
-    let creator_vault_pda = get_creator_vault_pda(&bonding_curve.creator).unwrap();
-    let max_sol_cost = calculate_with_slippage_buy(buy_sol_cost, slippage_basis_points.unwrap_or(100));
-
-    let mut buy_token_amount = get_buy_token_amount_from_sol_amount(&bonding_curve, buy_sol_cost);
-    if buy_token_amount <= 100 * 1_000_000_u64 {
-        buy_token_amount = if max_sol_cost > sol_to_lamports(0.01) {
-            25547619 * 1_000_000_u64
-        } else {
-            255476 * 1_000_000_u64
-        };
-    }
+    let bonding_curve_pda = get_bonding_curve_pda(&mint).unwrap();
+    let creator_vault_pda = get_creator_vault_pda(&creator).unwrap();
+    let max_amount_sol = calculate_with_slippage_buy(max_amount_sol, slippage_basis_points.unwrap_or(100));
 
     let mut instructions = vec![];
     instructions.push(create_associated_token_account_idempotent(
@@ -175,7 +196,7 @@ pub async fn build_buy_instructions(
         &FEE_RECIPIENT,
         instruction::Buy {
             _amount: buy_token_amount,
-            _max_sol_cost: max_sol_cost,
+            _max_sol_cost: max_amount_sol,
         },
     ));
 

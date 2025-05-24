@@ -12,15 +12,15 @@ use std::sync::Arc;
 
 use swqos::{FeeClient, JitoClient, NextBlockClient, ZeroSlotClient};
 use rustls::crypto::{ring::default_provider, CryptoProvider};
+use solana_hash::Hash;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-
+use tokio::sync::RwLock;
 use common::{logs_data::TradeInfo, logs_events::PumpfunEvent, logs_subscribe, Cluster, PriorityFee, SolanaRpcClient};
 use common::logs_subscribe::SubscriptionHandle;
-use ipfs::TokenMetadataIPFS;
 
 pub struct PumpFun {
     pub payer: Arc<Keypair>,
@@ -28,6 +28,7 @@ pub struct PumpFun {
     pub fee_clients: Vec<Arc<FeeClient>>,
     pub priority_fee: PriorityFee,
     pub cluster: Cluster,
+    pub blockhash_cache: Arc<RwLock<Hash>>
 }
 
 impl Clone for PumpFun {
@@ -38,6 +39,7 @@ impl Clone for PumpFun {
             fee_clients: self.fee_clients.clone(),
             priority_fee: self.priority_fee.clone(),
             cluster: self.cluster.clone(),
+            blockhash_cache: self.blockhash_cache.clone(),
         }
     }
 }
@@ -54,10 +56,20 @@ impl PumpFun {
                 .map_err(|e| anyhow::anyhow!("Failed to install crypto provider: {:?}", e));
         }
 
-        let rpc = SolanaRpcClient::new_with_commitment(
+        let rpc = Arc::new(SolanaRpcClient::new_with_commitment(
             cluster.clone().rpc_url,
             cluster.clone().commitment
-        );   
+        ));
+        let blockhash_cache = Arc::new(RwLock::new(rpc.get_latest_blockhash().await.unwrap()));
+
+        let rpc_clone = rpc.clone();
+        let blockhash_cache_clone = blockhash_cache.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+                *blockhash_cache_clone.write().await = rpc_clone.get_latest_blockhash().await.unwrap();
+            }
+        });
 
         let mut fee_clients: Vec<Arc<FeeClient>> = vec![];
         if cluster.clone().use_jito {
@@ -91,10 +103,11 @@ impl PumpFun {
 
         Self {
             payer,
-            rpc: Arc::new(rpc),
+            rpc: rpc.clone(),
             fee_clients,
             priority_fee: cluster.clone().priority_fee,
             cluster: cluster.clone(),
+            blockhash_cache: blockhash_cache.clone(),
         }
     }
     
@@ -102,16 +115,21 @@ impl PumpFun {
     pub async fn buy(
         &self,
         mint: Pubkey,
-        amount_sol: u64,
+        creator: Pubkey,
+        buy_token_amount: u64,
+        max_amount_sol: u64,
         slippage_basis_points: Option<u64>,
     ) -> Result<(), anyhow::Error> {
         pumpfun::buy::buy(
             self.rpc.clone(),
             self.payer.clone(),
             mint,
-            amount_sol,
+            creator,
+            buy_token_amount,
+            max_amount_sol,
             slippage_basis_points,
             self.priority_fee.clone(),
+            self.blockhash_cache.read().await.clone()
         ).await
     }
 
@@ -119,17 +137,21 @@ impl PumpFun {
     pub async fn buy_with_tip(
         &self,
         mint: Pubkey,
+        creator: Pubkey,
+        buy_token_amount: u64,
         amount_sol: u64,
         slippage_basis_points: Option<u64>,
     ) -> Result<(), anyhow::Error> {
         pumpfun::buy::buy_with_tip(
-            self.rpc.clone(),
             self.fee_clients.clone(),
             self.payer.clone(),
             mint,
+            creator,
+            buy_token_amount,
             amount_sol,
             slippage_basis_points,
             self.priority_fee.clone(),
+            self.blockhash_cache.read().await.clone(),
         ).await
     }
 
