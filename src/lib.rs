@@ -18,9 +18,12 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
+use solana_sdk::signature::Signature;
 use tokio::sync::RwLock;
+use anyhow::anyhow;
 use common::{logs_data::TradeInfo, logs_events::PumpfunEvent, logs_subscribe, Cluster, PriorityFee, SolanaRpcClient};
 use common::logs_subscribe::SubscriptionHandle;
+use crate::pumpfun::common::get_bonding_curve_account;
 
 pub struct PumpFun {
     pub payer: Arc<Keypair>,
@@ -279,6 +282,13 @@ impl PumpFun {
     #[inline]
     pub fn get_sell_price(&self, amount: u64, trade_info: &TradeInfo) -> u64 {
         pumpfun::common::get_sell_price(amount, trade_info)
+    }
+
+    #[inline]
+    pub async fn get_sell_price_from_bonding_curve(&self, mint: &Pubkey, amount: u64) -> Result<u64, anyhow::Error> {
+        let (bonding_curve_account, _) = get_bonding_curve_account(&self.rpc, mint).await
+            .map_err(|e| anyhow!(e))?;
+        Ok(pumpfun::common::get_sell_price_from_bonding_curve(amount, &bonding_curve_account))
     }
 
     #[inline]

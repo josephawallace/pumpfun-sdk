@@ -273,6 +273,20 @@ pub fn get_sell_price(amount: u64, trade_info: &TradeInfo) -> u64 {
 
     s_u64.min(trade_info.real_sol_reserves)
 }
+#[inline]
+pub fn get_sell_price_from_bonding_curve(amount: u64, bonding_curve_account: &BondingCurveAccount) -> u64 {
+    if amount == 0 {
+        return 0;
+    }
+
+    let n: u128 = (bonding_curve_account.virtual_sol_reserves as u128) * (bonding_curve_account.virtual_token_reserves as u128);
+    let i: u128 = (bonding_curve_account.virtual_token_reserves as u128) + (amount as u128);
+    let r: u128 = n / i;
+    let s: u128 = (bonding_curve_account.virtual_sol_reserves as u128) - r;
+    let s_u64 = s as u64;
+
+    s_u64.min(bonding_curve_account.real_sol_reserves)
+}
 
 #[inline]
 pub fn calculate_with_slippage_buy(amount: u64, basis_points: u64) -> u64 {
