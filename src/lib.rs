@@ -119,7 +119,7 @@ impl PumpFun {
         buy_token_amount: u64,
         max_amount_sol: u64,
         slippage_basis_points: Option<u64>,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<Signature, anyhow::Error> {
         pumpfun::buy::buy(
             self.rpc.clone(),
             self.payer.clone(),

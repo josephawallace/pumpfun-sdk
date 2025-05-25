@@ -6,7 +6,8 @@ use solana_hash::Hash;
 use spl_associated_token_account::instruction::create_associated_token_account_idempotent;
 use tokio::task::JoinHandle;
 use std::{str::FromStr, time::Instant, sync::Arc};
-
+use solana_rpc_client_api::config::RpcSendTransactionConfig;
+use solana_sdk::signature::Signature;
 use crate::{common::{PriorityFee, SolanaRpcClient}, constants::{self, global_constants::FEE_RECIPIENT}, instruction, swqos::FeeClient};
 
 const MAX_LOADED_ACCOUNTS_DATA_SIZE_LIMIT: u32 = 250000;
@@ -23,7 +24,7 @@ pub async fn buy(
     slippage_basis_points: Option<u64>,
     priority_fee: PriorityFee,
     recent_blockhash: Hash,
-) -> Result<(), anyhow::Error> {
+) -> Result<Signature, anyhow::Error> {
     let transaction = build_buy_transaction(
         payer.clone(),
         mint.clone(),
@@ -34,8 +35,12 @@ pub async fn buy(
         priority_fee.clone(),
         recent_blockhash,
     ).await?;
-    rpc.send_and_confirm_transaction(&transaction).await?;
-    Ok(())
+
+    let mut rpc_send_tx_config = RpcSendTransactionConfig::default();
+    rpc_send_tx_config.skip_preflight = true;
+
+    let signature = rpc.send_transaction_with_config(&transaction, rpc_send_tx_config).await?;
+    Ok(signature)
 }
 
 /// Buy tokens using Jito
