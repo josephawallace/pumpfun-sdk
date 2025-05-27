@@ -36,7 +36,7 @@ pub async fn sell(
     priority_fee: PriorityFee,
     recent_blockhash: Hash,
 ) -> Result<Signature, anyhow::Error> {
-    let instructions = build_sell_instructions(payer.clone(), bonding_curve_creator.clone(), mint.clone(), amount_token).await?;
+    let instructions = build_sell_instructions(payer.clone(), mint.clone(), bonding_curve_creator, amount_token).await?;
     let transaction = build_sell_transaction(payer.clone(), priority_fee, instructions, recent_blockhash).await?;
     
     let mut rpc_send_tx_config = RpcSendTransactionConfig::default();
@@ -192,13 +192,12 @@ pub async fn build_sell_instructions(
     bonding_curve_creator: Pubkey,
     amount_token: Option<u64>,
 ) -> Result<Vec<Instruction>, anyhow::Error> {
-    let ata = get_associated_token_address(&payer.pubkey(), &mint);
-    let amount = amount_token.ok_or(anyhow!("Amount cannot be zero"))?;
-    
+    let amount = amount_token.ok_or(anyhow!("Amount cannot be none"))?;
     if amount == 0 {
         return Err(anyhow!("Amount cannot be zero"));
     }
-    
+
+    let ata = get_associated_token_address(&payer.pubkey(), &mint);
     let bonding_curve_pda = get_bonding_curve_pda(&mint).unwrap();
     let creator_vault_pda = get_creator_vault_pda(&bonding_curve_creator).unwrap();
 
