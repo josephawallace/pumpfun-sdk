@@ -162,14 +162,17 @@ impl PumpFun {
     pub async fn sell(
         &self,
         mint: Pubkey,
+        bonding_curve_creator: Pubkey,
         amount_token: Option<u64>,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<Signature, anyhow::Error> {
         pumpfun::sell::sell(
             self.rpc.clone(),
             self.payer.clone(),
             mint.clone(),
+            bonding_curve_creator,
             amount_token,
             self.priority_fee.clone(),
+            self.blockhash_cache.read().await.clone(),
         ).await
     }
 
@@ -177,20 +180,24 @@ impl PumpFun {
     pub async fn sell_by_percent(
         &self,
         mint: Pubkey,
+        bonding_curve_creator: Pubkey,
         percent: u64,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<Signature, anyhow::Error> {
         pumpfun::sell::sell_by_percent(
             self.rpc.clone(),
             self.payer.clone(),
             mint.clone(),
+            bonding_curve_creator,
             percent,
             self.priority_fee.clone(),
+            self.blockhash_cache.read().await.clone(),
         ).await
     }
 
     pub async fn sell_by_percent_with_tip(
         &self,
         mint: Pubkey,
+        bonding_curve_creator: Pubkey,
         percent: u64,
     ) -> Result<(), anyhow::Error> {
         pumpfun::sell::sell_by_percent_with_tip(
@@ -198,8 +205,10 @@ impl PumpFun {
             self.fee_clients.clone(),
             self.payer.clone(),
             mint,
+            bonding_curve_creator,
             percent,
             self.priority_fee.clone(),
+            self.blockhash_cache.read().await.clone(),
         ).await
     }
 
@@ -207,15 +216,17 @@ impl PumpFun {
     pub async fn sell_with_tip(
         &self,
         mint: Pubkey,
+        bonding_curve_creator: Pubkey,
         amount_token: Option<u64>,
     ) -> Result<(), anyhow::Error> {
         pumpfun::sell::sell_with_tip(
-            self.rpc.clone(),
             self.fee_clients.clone(),
             self.payer.clone(),
+            bonding_curve_creator,
             mint,
             amount_token,
             self.priority_fee.clone(),
+            self.blockhash_cache.read().await.clone(),
         ).await
     }
 
