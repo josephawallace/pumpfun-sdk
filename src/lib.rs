@@ -295,7 +295,7 @@ impl PumpFun {
     }
 
     #[inline]
-    pub async fn get_sell_price_from_bonding_curve(&self, amount: u64, bonding_curve_account: &BondingCurveAccount) -> Result<u64, anyhow::Error> {
+    pub fn get_sell_price_from_bonding_curve(&self, amount: u64, bonding_curve_account: &BondingCurveAccount) -> Result<u64, anyhow::Error> {
         Ok(pumpfun::common::get_sell_price_from_bonding_curve(amount, bonding_curve_account))
     }
 
